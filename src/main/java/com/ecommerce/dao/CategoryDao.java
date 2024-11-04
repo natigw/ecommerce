@@ -15,53 +15,65 @@ public class CategoryDao {
     PreparedStatement preparedStatement = null;
     ResultSet resultSet = null;
 
-    // Method to set amount of products for category.
-    private void queryCategoryProductAmount(Category category) {
-        int productId = category.getId();
-        String query = "SELECT COUNT(*) FROM product WHERE fk_category_id = " + productId + " AND product_is_deleted = false";
+    // Method to close resources
+    private void closeResources() {
         try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
+            if (resultSet != null) resultSet.close();
+            if (preparedStatement != null) preparedStatement.close();
+            if (connection != null) connection.close();
+        } catch (SQLException e) {
+            System.out.println("Error closing resources: " + e.getMessage());
+        }
+    }
+
+    // Method to set amount of products for a category
+    private void queryCategoryProductAmount(Category category) {
+        String query = "SELECT COUNT(*) FROM product WHERE fk_category_id = ? AND product_is_deleted = false";
+        try {
             connection = new Database().getConnection();
             preparedStatement = connection.prepareStatement(query);
+            preparedStatement.setInt(1, category.getId());
             resultSet = preparedStatement.executeQuery();
             if (resultSet.next()) {
                 category.setTotalCategoryProduct(resultSet.getInt(1));
             }
-        } catch (ClassNotFoundException | SQLException e) {
-            System.out.println("Get category products amount catch: ");
-            System.out.println(e.getMessage());
+        } catch (SQLException e) {
+            System.out.println("Error getting category product amount: " + e.getMessage());
+        } finally {
+            closeResources();
         }
     }
 
-    // Method to get category by id.
+    // Method to get category by ID
     public Category getCategory(int categoryId) {
         Category category = new Category();
-        String query = "SELECT * FROM category WHERE category_id = " + categoryId;
+        String query = "SELECT * FROM category WHERE category_id = ?";
         try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
             connection = new Database().getConnection();
             preparedStatement = connection.prepareStatement(query);
+            preparedStatement.setInt(1, categoryId);
             resultSet = preparedStatement.executeQuery();
             if (resultSet.next()) {
                 category.setId(resultSet.getInt(1));
                 category.setName(resultSet.getString(2));
             }
-        } catch (SQLException | ClassNotFoundException e) {
-            System.out.println(e.getMessage());
+        } catch (SQLException e) {
+            System.out.println("Error retrieving category: " + e.getMessage());
+        } finally {
+            closeResources();
         }
 
-        // Call method to set category amount for category.
+        // Set product amount for the category
         queryCategoryProductAmount(category);
 
         return category;
     }
 
-    // Method to get all categories from database.
+    // Method to get all categories from the database
     public List<Category> getAllCategories() {
         List<Category> list = new ArrayList<>();
         String query = "SELECT * FROM category";
         try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
             connection = new Database().getConnection();
             preparedStatement = connection.prepareStatement(query);
             resultSet = preparedStatement.executeQuery();
@@ -71,11 +83,13 @@ public class CategoryDao {
                 category.setName(resultSet.getString(2));
                 list.add(category);
             }
-        } catch (SQLException | ClassNotFoundException e) {
-            e.printStackTrace();
+        } catch (SQLException e) {
+            System.out.println("Error retrieving all categories: " + e.getMessage());
+        } finally {
+            closeResources();
         }
 
-        // Call method to set category amount for category.
+        // Set product amount for each category
         for (Category category : list) {
             queryCategoryProductAmount(category);
         }

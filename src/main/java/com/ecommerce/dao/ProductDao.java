@@ -30,6 +30,24 @@ public class ProductDao {
         }
     }
 
+    private Product mapResultSetToProduct(ResultSet resultSet) throws SQLException, IOException {
+        int id = resultSet.getInt("product_id");
+        String name = resultSet.getString("product_name");
+        double price = resultSet.getDouble("product_price");
+        String description = resultSet.getString("product_description");
+        Category category = categoryDao.getCategory(resultSet.getInt("fk_category_id"));
+        Account account = accountDao.getAccount(resultSet.getInt("fk_account_id"));
+        boolean isDeleted = resultSet.getBoolean("product_is_deleted");
+        int amount = resultSet.getInt("product_amount");
+
+        // Get base64 image
+        Blob blob = resultSet.getBlob("product_image");
+        String base64Image = getBase64Image(blob);
+
+        return new Product(id, name, base64Image, price, description, category, account, isDeleted, amount);
+    }
+
+
     // Method to get blob image from database.
     private String getBase64Image(Blob blob) throws SQLException, IOException {
         InputStream inputStream = blob.getBinaryStream();
@@ -108,38 +126,88 @@ public class ProductDao {
     }
 
     // Method to get a categories by its id from database.
-    public List<Product> getAllCategoryProducts(int category_id) {
-        String query = "SELECT * FROM product WHERE fk_category_id = " + category_id + " AND product_is_deleted = false";
-        return getListProductQuery(query);
+    public List<Product> getAllCategoryProducts(int categoryId) {
+        String query = "SELECT * FROM product WHERE fk_category_id = ? AND product_is_deleted = false";
+        List<Product> products = new ArrayList<>();
+
+        try (Connection connection = new Database().getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(query)) {
+
+            preparedStatement.setInt(1, categoryId);
+
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                while (resultSet.next()) {
+                    products.add(mapResultSetToProduct(resultSet));
+                }
+            }
+        } catch (SQLException | IOException e) {
+            System.out.println("Error fetching products for category ID " + categoryId + ": " + e.getMessage());
+        }
+
+        return products;
     }
 
-    // Method to search a product by a keyword.
+
+    // Method to search a product by a keyword using a parameterized query
     public List<Product> searchProduct(String keyword) {
-        String query = "SELECT * FROM product WHERE product_name like '%" + keyword + "%' AND product_is_deleted = false";
-        return getListProductQuery(query);
+        List<Product> products = new ArrayList<>();
+        String query = "SELECT * FROM product WHERE product_name LIKE ? AND product_is_deleted = false";
+
+        try (Connection connection = new Database().getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(query)) {
+
+            // Set the keyword with wildcards for searching
+            preparedStatement.setString(1, "%" + keyword + "%");
+
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                while (resultSet.next()) {
+                    products.add(mapResultSetToProduct(resultSet));
+                }
+            }
+        } catch (SQLException | IOException e) {
+            System.out.println("Error searching products: " + e.getMessage());
+        }
+
+        return products;
     }
 
-    // Method to get all products of a seller.
+
+    // Method to get all products of a seller, securely with parameterized query
     public List<Product> getSellerProducts(int sellerId) {
-        String query = "SELECT * FROM product WHERE fk_account_id = " + sellerId;
-        return getListProductQuery(query);
+        String query = "SELECT * FROM product WHERE fk_account_id = ? AND product_is_deleted = false";
+        List<Product> products = new ArrayList<>();
+
+        try (Connection connection = new Database().getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(query)) {
+
+            preparedStatement.setInt(1, sellerId);
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                while (resultSet.next()) {
+                    products.add(mapResultSetToProduct(resultSet));
+                }
+            }
+        } catch (SQLException | IOException e) {
+            System.out.println("Error fetching seller products: " + e.getMessage());
+        }
+
+        return products;
     }
 
-    // Method to remove a product from database by its id.
+    // Method to remove a product from the database by its id, using a parameterized query
     public void removeProduct(Product product) {
-        // Get id of the product.
-        int productId = product.getId();
+        String query = "UPDATE product SET product_is_deleted = true WHERE product_id = ?";
 
-        String query = "UPDATE product SET product_is_deleted = true WHERE product_id = " + productId;
-        try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-            connection = new Database().getConnection();
-            preparedStatement = connection.prepareStatement(query);
+        try (Connection connection = new Database().getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(query)) {
+
+            preparedStatement.setInt(1, product.getId());
             preparedStatement.executeUpdate();
-        } catch (ClassNotFoundException | SQLException e) {
-            System.out.println(e.getMessage());
+
+        } catch (SQLException e) {
+            System.out.println("Error removing product: " + e.getMessage());
         }
     }
+
 
     // Method to add product to database.
     public void addProduct(String productName, InputStream productImage, double productPrice, String productDescription, int productCategory, int sellerId, int productAmount) {
@@ -183,11 +251,30 @@ public class ProductDao {
         }
     }
 
-    // Method to get 12 products to display on each page.
+    // Method to get 12 products to display on each page, securely using parameterized query
     public List<Product> get12ProductsOfPage(int index) {
-        String query = "SELECT * FROM product WHERE product_is_deleted = false ORDER BY product_id  DESC LIMIT " + ((index - 1) * 6) + ", 6";
-        return getListProductQuery(query);
+        String query = "SELECT * FROM product WHERE product_is_deleted = false LIMIT ?, 6";
+        List<Product> products = new ArrayList<>();
+
+        try (Connection connection = new Database().getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(query)) {
+
+            // Calculate the starting row for the current page
+            int offset = (index - 1) * 6;
+            preparedStatement.setInt(1, offset);
+
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                while (resultSet.next()) {
+                    products.add(mapResultSetToProduct(resultSet));
+                }
+            }
+        } catch (SQLException | IOException e) {
+            System.out.println("Error fetching paginated products: " + e.getMessage());
+        }
+
+        return products;
     }
+
 
     // Method to get total products in database.
     public int getTotalNumberOfProducts() {

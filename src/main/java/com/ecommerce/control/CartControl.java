@@ -22,9 +22,10 @@ public class CartControl extends HttpServlet {
     ProductDao productDao = new ProductDao();
 
     // Method to remove a product from cart.
-    private void removeCartProduct(int productId, Order order, double totalPrice) {
+    private void removeCartProduct(int productId, Order order) {
         // Get list of products from the existing order.
         List<CartProduct> list = order.getCartProducts();
+        double totalPrice = 0;
 
         // Iterator.remove is the only safe way to modify a collection during iteration
         for (Iterator<CartProduct> iterator = list.iterator(); iterator.hasNext();) {
@@ -51,7 +52,7 @@ public class CartControl extends HttpServlet {
             Order order = (Order) session.getAttribute("order");
             double totalPrice = (double) session.getAttribute("total_price");
             int productId = Integer.parseInt(request.getParameter("remove-product-id"));
-            removeCartProduct(productId, order, totalPrice);
+            removeCartProduct(productId, order);
             response.sendRedirect("cart.jsp");
             return;
         }

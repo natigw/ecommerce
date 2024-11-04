@@ -4,6 +4,7 @@ import com.ecommerce.dao.AccountDao;
 import com.ecommerce.dao.OrderDao;
 import com.ecommerce.entity.Account;
 import com.ecommerce.entity.Order;
+import com.ecommerce.util.EmailUtil;
 
 import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletException;
@@ -23,7 +24,7 @@ public class CheckoutControl extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         HttpSession session = request.getSession();
-        // Get information from input field.
+        // Get information from input fields
         String firstName = request.getParameter("first-name");
         String lastName = request.getParameter("last-name");
         String address = request.getParameter("address");
@@ -32,22 +33,34 @@ public class CheckoutControl extends HttpServlet {
 
         if (session.getAttribute("account") == null) {
             response.sendRedirect("login.jsp");
-        }
-        else {
+        } else {
             double totalPrice = (double) session.getAttribute("total_price");
             Order order = (Order) session.getAttribute("order");
             Account account = (Account) session.getAttribute("account");
 
-            // Insert information to account.
+            // Update profile information
             int accountId = account.getId();
             accountDao.updateProfileInformation(accountId, firstName, lastName, address, email, phone);
-            // Insert order to database.
-            orderDao.createOrder(account.getId(), totalPrice, order.getCartProducts());
-            session.removeAttribute("order");
-            session.removeAttribute("total_price");
 
-            RequestDispatcher requestDispatcher = request.getRequestDispatcher("thankyou.jsp");
-            requestDispatcher.forward(request, response);
+            // Insert order into database
+            orderDao.createOrder(accountId, totalPrice, order.getCartProducts());
+
+            // Send email notification
+            EmailUtil emailUtil = new EmailUtil();
+            String subject = "Order Confirmation";
+            String body = "Dear " + firstName + " " + lastName + ",\n\n" +
+                    "Thank you for your order! Your order total is $" + totalPrice + ".\n\n" +
+                    "Best regards,\nE-commerce Team";
+            emailUtil.sendEmail(email, subject, body);
+
+            // Remove session attributes
+            session.removeAttribute("order");
+            session.setAttribute("total_price", 0);
+
+            // Forward totalPrice to PaymentServlet by setting it in the session
+            session.setAttribute("totalPrice", totalPrice);
+
+            response.sendRedirect("payment");
         }
     }
 }

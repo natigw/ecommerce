@@ -35,9 +35,12 @@ public class ProfileControl extends HttpServlet {
 
         // Set default profile image for account.
         Part part = request.getPart("profile-image");
-        InputStream inputStream = part.getInputStream();
-
-        System.out.println(accountId + " " + firstName + " " + lastName + " " + address + " " + email + " " + phone);
+        InputStream inputStream = null;
+        if (part != null && part.getSize() > 0) {
+            inputStream = part.getInputStream();
+        } else {
+            System.out.println("Profile image is empty or not provided.");
+        }
 
         accountDao.editProfileInformation(accountId, firstName, lastName, address, email, phone, inputStream);
         response.sendRedirect("login");
